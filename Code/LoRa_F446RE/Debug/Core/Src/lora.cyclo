@@ -1,0 +1,9 @@
+../Core/Src/lora.c:5:6:LoRa_WriteRegister	1
+../Core/Src/lora.c:12:9:LoRa_ReadRegister	1
+../Core/Src/lora.c:22:5:LoRa_Init	3
+../Core/Src/lora.c:63:6:LoRa_Transmit	4
+../Core/Src/lora.c:101:5:LoRa_Receive	5
+../Core/Src/lora.c:136:6:LoRa_SetFrequency	1
+../Core/Src/lora.c:143:6:LoRa_SetSpreadingFactor	4
+../Core/Src/lora.c:158:5:LoRa_GetRSSI	1
+../Core/Src/lora.c:165:7:LoRa_EstimateDistance	1
