@@ -1,0 +1,284 @@
+/* USER CODE BEGIN Header */
+/**
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Complete STM32F446RE RX Code for StructEye LoRa node
+ ******************************************************************************
+ */
+/* USER CODE END Header */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include <stdio.h>
+#include "lora.h"
+
+/* Private variables ---------------------------------------------------------*/
+SPI_HandleTypeDef hspi1;
+UART_HandleTypeDef huart2;
+
+/* USER CODE BEGIN PV */
+volatile uint8_t lora_rx_flag = 0;
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_USART2_UART_Init(void);
+static void MX_SPI1_Init(void);
+
+/* USER CODE BEGIN PFP */
+int _write(int file, char *ptr, int len) {
+  HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, HAL_MAX_DELAY);
+  return len;
+}
+
+uint16_t crc16(const uint8_t *data, uint16_t len) {
+  uint16_t crc = 0xFFFF;
+  for (uint16_t i = 0; i < len; i++) {
+    crc ^= (uint16_t)data[i] << 8;
+    for (uint8_t j = 0; j < 8; j++) {
+      if (crc & 0x8000)
+        crc = (crc << 1) ^ 0x1021;
+      else
+        crc <<= 1;
+    }
+  }
+  return crc;
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  if (GPIO_Pin == GPIO_PIN_0) {
+    lora_rx_flag = 1;
+  }
+}
+/* USER CODE END PFP */
+
+int main(void) {
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_SPI1_Init();
+  MX_USART2_UART_Init();
+
+  /* USER CODE BEGIN 2 */
+  printf("\r\n========================================\r\n");
+  printf("  StructEye STM32F446RE LoRa RX Node Started.\r\n");
+  printf("========================================\r\n");
+
+  SX1278_Init();
+  SX1278_StartRX();
+
+  printf("Listening for StructEye packets...\r\n");
+
+  uint8_t rx_buffer[256];
+  /* USER CODE END 2 */
+
+  while (1) {
+    /* USER CODE BEGIN 3 */
+    if (lora_rx_flag) {
+      lora_rx_flag = 0;
+
+      uint8_t irqFlags = SX1278_ReadRegister(REG_IRQ_FLAGS);
+      // Clear all IRQ flags
+      SX1278_WriteRegister(REG_IRQ_FLAGS, irqFlags);
+
+      if ((irqFlags & 0x40) != 0) { // RxDone bit is set
+        uint8_t len = SX1278_ReadRegister(REG_RX_NB_BYTES);
+        uint8_t fifoAddr = SX1278_ReadRegister(REG_FIFO_RX_CURRENT_ADDR);
+        SX1278_WriteRegister(
+            REG_FIFO_ADDR_PTR,
+            fifoAddr); // Set FIFO pointer to start of RX packet
+
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+        uint8_t reg = REG_FIFO & 0x7F;
+        HAL_SPI_Transmit(&hspi1, &reg, 1, HAL_MAX_DELAY);
+        HAL_SPI_Receive(&hspi1, rx_buffer, len, HAL_MAX_DELAY);
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+
+        if (len == 23 && rx_buffer[0] == 0xAA) {
+          uint16_t received_crc = (rx_buffer[21] << 8) | rx_buffer[22];
+          uint16_t computed_crc = crc16(rx_buffer, 21);
+
+          if (received_crc == computed_crc) {
+            uint8_t node_id = rx_buffer[1];
+            uint8_t seq = rx_buffer[2];
+
+            int16_t ax = (int16_t)((rx_buffer[3] << 8) | rx_buffer[4]);
+            int16_t ay = (int16_t)((rx_buffer[5] << 8) | rx_buffer[6]);
+            int16_t az = (int16_t)((rx_buffer[7] << 8) | rx_buffer[8]);
+
+            int16_t gx = (int16_t)((rx_buffer[9] << 8) | rx_buffer[10]);
+            int16_t gy = (int16_t)((rx_buffer[11] << 8) | rx_buffer[12]);
+            int16_t gz = (int16_t)((rx_buffer[13] << 8) | rx_buffer[14]);
+
+            uint16_t vib = (uint16_t)((rx_buffer[15] << 8) | rx_buffer[16]);
+            int16_t tilt = (int16_t)((rx_buffer[17] << 8) | rx_buffer[18]);
+
+            uint8_t status = rx_buffer[19];
+            uint8_t alert = rx_buffer[20];
+
+            printf("\r\n--- Packet Received ---\r\n");
+            printf("Node ID: %u | Seq: %u\r\n", node_id, seq);
+            printf("Accel: X=%.2f Y=%.2f Z=%.2f (m/s2)\r\n", ax / 100.0,
+                   ay / 100.0, az / 100.0);
+            printf("Gyro:  X=%.2f Y=%.2f Z=%.2f (deg/s)\r\n", gx / 100.0,
+                   gy / 100.0, gz / 100.0);
+            printf("Vibration: %.2f m/s2 | Tilt: %.2f deg\r\n", vib / 100.0,
+                   tilt / 100.0);
+
+            printf("Status: 0x%02X ", status);
+            if (status & 0x01)
+              printf("[VIB_EXCEEDED] ");
+            if (status & 0x02)
+              printf("[TILT_EXCEEDED] ");
+            if (status & 0x04)
+              printf("[SENSOR_FAULT] ");
+            if (status & 0x08)
+              printf("[REBOOT] ");
+            printf("\r\n");
+
+            printf("Alert Level: ");
+            if (alert == 0)
+              printf("OK\r\n");
+            else if (alert == 1)
+              printf("WARN\r\n");
+            else if (alert == 2)
+              printf("CRITICAL\r\n");
+          } else {
+            printf("CRC Error! Recv: %04X, Comp: %04X\r\n", received_crc,
+                   computed_crc);
+          }
+        } else {
+          printf("Invalid frame or length (len=%u, byte0=0x%02X)\r\n", len,
+                 rx_buffer[0]);
+        }
+      }
+    }
+    /* USER CODE END 3 */
+  }
+}
+
+void SystemClock_Config(void) {
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  __HAL_RCC_PWR_CLK_ENABLE();
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 16;
+  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLR = 2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+    Error_Handler();
+  }
+
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                                RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+    Error_Handler();
+  }
+}
+
+static void MX_SPI1_Init(void) {
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK) {
+    Error_Handler();
+  }
+}
+
+static void MX_USART2_UART_Init(void) {
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK) {
+    Error_Handler();
+  }
+}
+
+static void MX_GPIO_Init(void) {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+
+  /* PC0 EXTI0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /* PA4 Output (NSS) */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* PB0 Output (RST) */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* SPI1 and USART2 GPIO Configuration */
+  GPIO_InitStruct.Pin = GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+}
+
+void Error_Handler(void) {
+  __disable_irq();
+  while (1) {
+  }
+}
+
+#ifdef USE_FULL_ASSERT
+void assert_failed(uint8_t *file, uint32_t line) {}
+#endif /* USE_FULL_ASSERT */
