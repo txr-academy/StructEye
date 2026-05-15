@@ -1,0 +1,10 @@
+17:17:36 **** Incremental Build of configuration Debug for project F407G_TX ****
+make -j8 all 
+arm-none-eabi-size  F407G_TX.elf 
+   text	   data	    bss	    dec	    hex	filename
+  43760	    124	   4252	  48136	   bc08	F407G_TX.elf
+Finished building: default.size.stdout
+ 
+
+17:17:37 Build Finished. 0 errors, 0 warnings. (took 1s.46ms)
+
