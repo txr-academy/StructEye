@@ -1,0 +1,5 @@
+../Core/Src/lora.c:6:6:SX1278_WriteRegister	1
+../Core/Src/lora.c:14:9:SX1278_ReadRegister	1
+../Core/Src/lora.c:24:6:SX1278_Init	1
+../Core/Src/lora.c:74:6:SX1278_StartRX	1
+../Core/Src/lora.c:92:6:SX1278_RestartRX	1

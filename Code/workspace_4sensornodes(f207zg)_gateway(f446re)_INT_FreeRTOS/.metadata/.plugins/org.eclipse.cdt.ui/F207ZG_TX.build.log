@@ -1,0 +1,17 @@
+15:47:32 **** Incremental Build of configuration Debug for project F207ZG_TX ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F207xx -c -I../Core/Inc -I../Drivers/STM32F2xx_HAL_Driver/Inc -I../Drivers/STM32F2xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F2xx/Include -I../Drivers/CMSIS/Include -I../Middlewares/Third_Party/FreeRTOS/Source/include -I../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM3 -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "F207ZG_TX.elf" @"objects.list"   -mcpu=cortex-m3 -T"C:\Users\ASUS\STM32CubeIDE\workspace_TX__RX_F446RE_WITH_MPU6050_LoRa\F207ZG_TX\STM32F207ZGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="F207ZG_TX.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: F207ZG_TX.elf
+ 
+arm-none-eabi-size  F207ZG_TX.elf 
+arm-none-eabi-objdump -h -S F207ZG_TX.elf  > "F207ZG_TX.list"
+   text	   data	    bss	    dec	    hex	filename
+  45596	    100	  22340	  68036	  109c4	F207ZG_TX.elf
+Finished building: default.size.stdout
+ 
+Finished building: F207ZG_TX.list
+ 
+
+15:47:46 Build Finished. 0 errors, 0 warnings. (took 13s.523ms)
+

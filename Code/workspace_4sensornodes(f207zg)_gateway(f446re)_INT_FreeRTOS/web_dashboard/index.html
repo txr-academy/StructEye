@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StructEye | IoT Dashboard</title>
+    <!-- Modern MQTT.js Library -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="terminal-container">
+        <!-- TOP HEADER -->
+        <header class="term-header-bar">
+            <div class="header-logo"><span class="zap">⚡</span> STRUCTEYE</div>
+            <div class="header-desc">LoRa Structural Health Monitor</div>
+            <div id="header-time" class="header-time">2026-06-01  17:35:12</div>
+            <div class="header-com">✅ Web Socket Active</div>
+            <div class="header-session">🔑 SESSION: <span id="session-display">Waiting...</span></div>
+        </header>
+
+        <!-- SETUP PANEL (Hidden when connected) -->
+        <section id="setup-panel" class="setup-panel">
+            <div>
+                Enter your Session ID from the Python terminal to connect:
+                <br><br>
+                <input type="text" id="session-input" placeholder="structeye_xxxx" autocomplete="off">
+                <button id="connect-btn">Connect</button>
+                <div id="conn-error" class="error-msg"></div>
+            </div>
+        </section>
+
+        <!-- MAIN DASHBOARD (Hidden until connected) -->
+        <main id="dashboard-main" class="hidden">
+            <!-- SUMMARY TABLE -->
+            <div class="section-title"><span> All Nodes - Live Summary </span></div>
+            <div class="table-container">
+                <table id="summary-table">
+                    <thead>
+                        <tr>
+                            <th class="col-node">Node</th>
+                            <th class="col-seq">Seq</th>
+                            <th class="col-vib">Vibration (m/s²)</th>
+                            <th class="col-tilt">Tilt (°)</th>
+                            <th class="col-accel">Accel X / Y / Z</th>
+                            <th class="col-gyro">Gyro X / Y / Z</th>
+                            <th class="col-rx">RX</th>
+                            <th class="col-missed">Missed</th>
+                            <th class="col-alert">Alert</th>
+                            <th class="col-last">Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summary-tbody">
+                        <!-- Rows injected by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- NODE CARDS GRID -->
+            <div id="nodes-grid" class="nodes-grid">
+                <!-- Cards injected by JS -->
+            </div>
+
+            <!-- NETWORK STATISTICS -->
+            <div class="section-title"><span> Network Statistics </span></div>
+            <div class="stats-container">
+                <div class="stat-col">
+                    <div><span class="stat-label">Total RX</span> <span id="stat-rx" class="stat-val blue">0</span></div>
+                    <div><span class="stat-label">Dropped</span> <span id="stat-dropped" class="stat-val red">0</span></div>
+                    <div><span class="stat-label">Active Nodes</span> <span id="stat-active" class="stat-val blue">0</span></div>
+                </div>
+                <div class="stat-col">
+                    <div><span class="stat-label">Valid</span> <span id="stat-valid" class="stat-val green">0</span></div>
+                    <div><span class="stat-label">Drop Rate</span> <span id="stat-rate" class="stat-val green">0.0%</span></div>
+                    <div><span class="stat-label">Link Health</span> <span id="stat-health" class="stat-val green">EXCELLENT</span></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- TEMPLATES -->
+    <template id="table-row-template">
+        <tr class="node-row">
+            <td class="col-node node-name cyan">Node ?</td>
+            <td class="col-seq seq-val grey">0</td>
+            <td class="col-vib">
+                <div class="ascii-bar vib-bar green">||||||||||||||||||||||</div>
+                <div class="vib-val green">0.00</div>
+            </td>
+            <td class="col-tilt">
+                <div class="ascii-bar tilt-bar green">||||||||||||||||||||||</div>
+                <div class="tilt-val green">0.00</div>
+            </td>
+            <td class="col-accel blue">+0.00 / +0.00 / +0.00</td>
+            <td class="col-gyro magenta">+0.00 / +0.00 / +0.00</td>
+            <td class="col-rx rx-val blue">0</td>
+            <td class="col-missed missed-val yellow">0</td>
+            <td class="col-alert alert-badge green">✅ OK</td>
+            <td class="col-last last-seen green">0s ago</td>
+        </tr>
+    </template>
+
+    <template id="node-card-template">
+        <div class="node-card ok-border">
+            <div class="card-title">Node <span class="node-id">?</span></div>
+            <div class="card-row">
+                <span class="label">Alert</span> <span class="alert-badge green">✅ OK</span>
+            </div>
+            <div class="card-row">
+                <span class="label">Flags</span> <span class="flags-val green">NORMAL</span>
+            </div>
+            <div class="card-row">
+                <span class="label">Seq</span> <span class="seq-val white">0</span>
+            </div>
+            <div class="card-row">
+                <span class="label">Packets</span> <span class="rx-val blue">0</span> <span class="missed-text blue">missed:<span class="missed-val">0</span></span>
+            </div>
+            <br>
+            <div class="card-row">
+                <span class="label">Vib</span> <span class="ascii-bar vib-bar green">||||||||||||||||||||||</span> <span class="vib-val green right">0.00</span>
+            </div>
+            <div class="card-row">
+                <span class="label">Tilt</span> <span class="ascii-bar tilt-bar green">||||||||||||||||||||||</span> <span class="tilt-val green right">0.00</span>
+            </div>
+            <br>
+            <div class="card-row">
+                <span class="label">Vib hist</span> <span class="sparkline cyan"> ▂▃▄▅▆▇█</span>
+            </div>
+            <br>
+            <div class="card-row">
+                <span class="label">Accel X</span> <span class="accel-x blue">+0.00 m/s²</span>
+            </div>
+            <div class="card-row">
+                <span class="label">Accel Y</span> <span class="accel-y blue">+0.00 m/s²</span>
+            </div>
+            <div class="card-row">
+                <span class="label">Accel Z</span> <span class="accel-z blue">+0.00 m/s²</span>
+            </div>
+            <div class="card-row">
+                <span class="label">Gyro X</span> <span class="gyro-x magenta">+0.00 °/s</span>
+            </div>
+            <div class="card-row">
+                <span class="label">Gyro Y</span> <span class="gyro-y magenta">+0.00 °/s</span>
+            </div>
+            <div class="card-row">
+                <span class="label">Gyro Z</span> <span class="gyro-z magenta">+0.00 °/s</span>
+            </div>
+            <br>
+            <div class="card-row">
+                <span class="label">Last</span> <span class="last-seen green">0s ago</span>
+            </div>
+            <div class="card-footer alert-badge green">✅ OK</div>
+        </div>
+    </template>
+
+    <script src="app.js?v=8"></script>
+</body>
+</html>

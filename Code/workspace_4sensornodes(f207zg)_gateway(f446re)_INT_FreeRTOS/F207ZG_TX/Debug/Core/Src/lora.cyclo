@@ -1,0 +1,6 @@
+../Core/Src/lora.c:9:6:SX1278_WriteRegister	1
+../Core/Src/lora.c:16:9:SX1278_ReadRegister	1
+../Core/Src/lora.c:27:13:SX1278_WriteFIFO	1
+../Core/Src/lora.c:39:9:SX1278_Init	3
+../Core/Src/lora.c:114:6:SX1278_Transmit	3
+../Core/Src/lora.c:153:9:SX1278_PerformCAD	2

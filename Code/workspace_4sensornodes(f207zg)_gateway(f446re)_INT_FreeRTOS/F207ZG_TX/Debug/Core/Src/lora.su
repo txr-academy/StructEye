@@ -1,0 +1,6 @@
+../Core/Src/lora.c:9:6:SX1278_WriteRegister	24	static
+../Core/Src/lora.c:16:9:SX1278_ReadRegister	24	static
+../Core/Src/lora.c:27:13:SX1278_WriteFIFO	24	static
+../Core/Src/lora.c:39:9:SX1278_Init	16	static
+../Core/Src/lora.c:114:6:SX1278_Transmit	24	static
+../Core/Src/lora.c:153:9:SX1278_PerformCAD	16	static
