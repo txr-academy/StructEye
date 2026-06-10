@@ -1,0 +1,260 @@
+/*
+ * mqtt_app.c
+ * ─────────────────────────────────────────────────────────────────────────────
+ * MQTT "Hello World" publisher for STM32F207ZG + LwIP (FreeRTOS / CMSIS-RTOS2)
+ *
+ * Uses Paho MQTTClient-C with a hand-written LwIP netconn transport.
+ * No sockets needed — works with LWIP_SOCKET=0.
+ *
+ * What it does
+ *   1. Waits until LwIP netif is UP (Ethernet link detected)
+ *   2. Opens a TCP connection to the Mosquitto broker
+ *   3. Sends MQTT CONNECT
+ *   4. Every 2 seconds publishes:
+ *        topic:   mqtt/hello
+ *        payload: Hello from STM32! count=N
+ *   5. If the connection drops it reconnects automatically
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+#include "mqtt_app.h"
+
+/* LwIP */
+#include "lwip/netif.h"
+#include "lwip/api.h"        /* netconn API */
+#include "lwip/ip_addr.h"
+
+/* Paho */
+#include "MQTTClient.h"
+
+/* HAL / RTOS */
+#include "cmsis_os.h"
+#include "main.h"
+
+#include <stdio.h>
+#include <string.h>
+
+/* ── gnetif is declared in lwip.c ───────────────────────────────────────── */
+extern struct netif gnetif;
+
+/* ── Internal buffers (static = no heap required) ───────────────────────── */
+#define SEND_BUF_LEN   512
+#define RECV_BUF_LEN   512
+
+static unsigned char s_send_buf[SEND_BUF_LEN];
+static unsigned char s_recv_buf[RECV_BUF_LEN];
+
+/* ── One persistent TCP connection (owned by this file) ─────────────────── */
+static struct netconn *s_conn = NULL;
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  LwIP netconn transport — Paho calls these via function pointers
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Read up to `len` bytes from the TCP connection.
+ * Returns number of bytes actually read, or 0 on timeout, or -1 on error.
+ */
+static int transport_read(Network *n, unsigned char *buf, int len, int timeout_ms)
+{
+    (void)n;
+    if (s_conn == NULL) return -1;
+
+    netconn_set_recvtimeout(s_conn, (uint32_t)(timeout_ms < 1 ? 1 : timeout_ms));
+
+    struct netbuf *nb = NULL;
+    err_t err = netconn_recv(s_conn, &nb);
+
+    if (err == ERR_TIMEOUT) return 0;        /* timeout = 0 bytes read */
+    if (err != ERR_OK || nb == NULL) return -1;  /* real error */
+
+    /* Copy data out of the netbuf */
+    void    *data  = NULL;
+    uint16_t avail = 0;
+    netbuf_data(nb, &data, &avail);
+
+    int copy = ((int)avail < len) ? (int)avail : len;
+    memcpy(buf, data, (size_t)copy);
+    netbuf_delete(nb);
+    return copy;
+}
+
+/**
+ * Write `len` bytes to the TCP connection.
+ * Returns number of bytes written, or -1 on error.
+ */
+static int transport_write(Network *n, unsigned char *buf, int len, int timeout_ms)
+{
+    (void)n; (void)timeout_ms;
+    if (s_conn == NULL) return -1;
+
+    err_t err = netconn_write(s_conn, buf, (size_t)len, NETCONN_COPY);
+    return (err == ERR_OK) ? len : -1;
+}
+
+static int transport_connect(const char *ip_str, uint16_t port)
+{printf("===== ENTER transport_connect =====\r\n");
+    /* Close any previous connection cleanly */
+    if (s_conn != NULL) {
+        netconn_close(s_conn);
+        netconn_delete(s_conn);
+        s_conn = NULL;
+    }
+
+    s_conn = netconn_new(NETCONN_TCP);
+    if (s_conn == NULL) {
+        printf("[MQTT] netconn_new failed (out of memory)\r\n");
+        return -1;
+    }
+
+    ip_addr_t dest;
+    memset(&dest, 0, sizeof(dest));
+    if (!ipaddr_aton(ip_str, &dest)) {
+        printf("[MQTT] Bad broker IP: %s\r\n", ip_str);
+        netconn_delete(s_conn);
+        s_conn = NULL;
+        return -1;
+    }
+    printf("[DEBUG] Calling netconn_connect...\r\n");
+    err_t err = netconn_connect(s_conn, &dest, port);
+    printf("[DEBUG] netconn_connect returned %d\r\n", (int)err);
+    if (err != ERR_OK) {
+        printf("[MQTT] TCP connect to %s:%u failed err=%d\r\n",
+               ip_str, (unsigned)port, (int)err);
+        osDelay(10);
+        netconn_delete(s_conn);
+        s_conn = NULL;
+        return -1;
+    }
+
+    printf("[MQTT] TCP connected to %s:%u\r\n", ip_str, (unsigned)port);
+    osDelay(10);
+    return 0;
+}
+
+/**
+ * Close and free the TCP connection.
+ */
+static void transport_disconnect(void)
+{
+    if (s_conn != NULL) {
+        netconn_close(s_conn);
+        netconn_delete(s_conn);
+        s_conn = NULL;
+    }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  MQTT_Task  — called from defaultTask after MX_LWIP_Init()
+ * ══════════════════════════════════════════════════════════════════════════ */
+void MQTT_Task(void *argument)
+{
+    (void)argument;
+
+    /* ── 1. Wait for Ethernet link + IP ───────────────────────────────── */
+    printf("[MQTT] Waiting for netif link...\r\n");
+    uint32_t t0 = osKernelGetTickCount();
+    while (!netif_is_link_up(&gnetif)) {
+        osDelay(200);
+        if ((osKernelGetTickCount() - t0) > 15000U) {
+            printf("[MQTT] No link after 15s — check Ethernet cable!\r\n");
+            /* Blink red LED so you can see the problem */
+            for (;;) {
+                HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+                osDelay(300);
+            }
+        }
+    }
+    printf("[MQTT] Link UP! (Static IP: 192.168.1.10)\r\n");
+    printf("NETIF UP=%d\r\n", netif_is_up(&gnetif));
+    printf("LINK UP=%d\r\n", netif_is_link_up(&gnetif));
+
+    printf("MAC=%02X:%02X:%02X:%02X:%02X:%02X\r\n",
+           gnetif.hwaddr[0],
+           gnetif.hwaddr[1],
+           gnetif.hwaddr[2],
+           gnetif.hwaddr[3],
+           gnetif.hwaddr[4],
+           gnetif.hwaddr[5]);
+    /* ── 2. Set up Paho Network struct ───────────────────────────────── */
+    Network    net;
+    MQTTClient client;
+
+    net.mqttread  = transport_read;
+    net.mqttwrite = transport_write;
+
+    MQTTClientInit(&client, &net,
+                   4000,                   /* command timeout ms */
+                   s_send_buf, SEND_BUF_LEN,
+                   s_recv_buf, RECV_BUF_LEN);
+
+    uint32_t publish_count = 0;
+
+    /* ── 3. Outer loop: (re)connect then publish ─────────────────────── */
+    for (;;)
+    {
+        /* ── 3a. TCP connect ─────────────────────────────────────────── */
+        printf("[MQTT] Connecting TCP to broker %s:%u ...\r\n",
+               MQTT_BROKER_IP, MQTT_BROKER_PORT);
+        osDelay(10);
+
+        while (transport_connect(MQTT_BROKER_IP, MQTT_BROKER_PORT) != 0) {
+            printf("[MQTT] TCP retry in 5s...\r\n");
+            osDelay(5000);
+        }
+
+        /* ── 3b. MQTT CONNECT packet ─────────────────────────────────── */
+        MQTTPacket_connectData opts = MQTTPacket_connectData_initializer;
+        opts.clientID.cstring  = (char *)MQTT_CLIENT_ID;
+        opts.keepAliveInterval = 60;
+        opts.cleansession      = 1;
+
+        int rc = MQTTConnect(&client, &opts);
+        if (rc != SUCCESS) {
+            printf("[MQTT] MQTT CONNECT failed rc=%d, retrying...\r\n", rc);
+            transport_disconnect();
+            osDelay(3000);
+            continue;   /* go back to TCP connect */
+        }
+        printf("[MQTT] *** MQTT CONNECTED! ***\r\n");
+        printf("[MQTT] Publishing to topic: %s\r\n", MQTT_TOPIC);
+
+        /* ── 3c. Publish loop ────────────────────────────────────────── */
+        for (;;)
+        {
+            osDelay(2000);   /* publish every 2 seconds */
+
+            publish_count++;
+
+            /* Build payload */
+            char payload[80];
+            int  plen = snprintf(payload, sizeof(payload),
+                                 "Hello from STM32! count=%lu",
+                                 (unsigned long)publish_count);
+
+            MQTTMessage msg;
+            memset(&msg, 0, sizeof(msg));
+            msg.qos        = QOS0;       /* QoS 0 = fire-and-forget (simplest) */
+            msg.retained   = 0;
+            msg.payload    = payload;
+            msg.payloadlen = (size_t)plen;
+
+            rc = MQTTPublish(&client, MQTT_TOPIC, &msg);
+            if (rc == SUCCESS) {
+                printf("[MQTT] Published #%lu: %s\r\n",
+                       (unsigned long)publish_count, payload);
+                /* Blink green LED on each successful publish */
+                HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+            } else {
+                printf("[MQTT] Publish FAILED rc=%d — reconnecting\r\n", rc);
+                transport_disconnect();
+                break;   /* break inner loop → go back to TCP connect */
+            }
+
+            /* Paho keepalive — must call regularly */
+            MQTTYield(&client, 100);
+        }
+        /* Small delay before reconnect attempt */
+        osDelay(2000);
+    }
+}

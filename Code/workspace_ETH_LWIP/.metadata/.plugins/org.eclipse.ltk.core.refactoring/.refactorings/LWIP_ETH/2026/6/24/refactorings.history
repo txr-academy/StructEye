@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">&#x0A;<refactoring comment="Rename resource &apos;LWIP_ETH/Core/Inc/tcp_app.h&apos; to &apos;tcp_app.h.bak&apos;" description="Rename resource &apos;tcp_app.h&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="Core/Inc/tcp_app.h" name="tcp_app.h.bak" stamp="1781068407319" updateReferences="true"/>&#x0A;<refactoring comment="Rename resource &apos;LWIP_ETH/Core/Src/tcp_app.c&apos; to &apos;tcp_app.c.bak&apos;" description="Rename resource &apos;tcp_app.c&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="Core/Src/tcp_app.c" name="tcp_app.c.bak" stamp="1781068427622" updateReferences="true"/>
+</session>

@@ -1,0 +1,6 @@
+../Core/Src/tcp_server.c:28:6:TCP_Server_Init	16	static
+../Core/Src/tcp_server.c:61:14:tcp_server_accept	40	static
+../Core/Src/tcp_server.c:84:14:tcp_server_recv	24	static
+../Core/Src/tcp_server.c:115:13:tcp_server_error	16	static
+../Core/Src/tcp_server.c:126:9:TCP_Server_IsClientConnected	4	static
+../Core/Src/tcp_server.c:137:9:TCP_Server_Send	24	static

@@ -1,0 +1,26 @@
+/*
+ * mqtt_app.h
+ * ─────────────────────────────────────────────────────────────────────────────
+ * MQTT configuration and task entry point for STM32F207ZG + LwIP + Paho
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+#ifndef INC_MQTT_APP_H_
+#define INC_MQTT_APP_H_
+
+#include <stdint.h>
+
+/* ── Broker is on friend's PC (direct Ethernet cable) ───────────────────── */
+#define MQTT_BROKER_IP    "192.168.10.200"
+#define MQTT_BROKER_PORT  1883
+
+/* ── STM32 publishes to this topic ──────────────────────────────────────── */
+#define MQTT_TOPIC        "mqtt/hello"
+
+/* ── Client ID — must be unique per broker ──────────────────────────────── */
+#define MQTT_CLIENT_ID    "stm32-f207zg"
+
+/* ── Called from the defaultTask after MX_LWIP_Init() ───────────────────── */
+void MQTT_Task(void *argument);
+
+#endif /* INC_MQTT_APP_H_ */

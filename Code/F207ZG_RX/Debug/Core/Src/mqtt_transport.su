@@ -1,0 +1,10 @@
+../Core/Src/mqtt_transport.c:12:12:lwip_read	48	static
+../Core/Src/mqtt_transport.c:36:12:lwip_write	40	static
+../Core/Src/mqtt_transport.c:46:12:lwip_connect	32	static
+../Core/Src/mqtt_transport.c:72:13:lwip_disconnect	16	static
+../Core/Src/mqtt_transport.c:83:6:MQTT_NetworkInit	24	static
+../Core/Src/mqtt_transport.c:95:6:TimerInit	16	static
+../Core/Src/mqtt_transport.c:98:6:TimerIsExpired	16	static
+../Core/Src/mqtt_transport.c:101:6:TimerCountdownMS	16	static
+../Core/Src/mqtt_transport.c:104:6:TimerCountdown	16	static
+../Core/Src/mqtt_transport.c:107:5:TimerLeftMS	32	static
