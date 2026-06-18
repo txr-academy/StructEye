@@ -1,0 +1,92 @@
+/*
+ * tcp_app.c — Minimal TCP client for STM32 Nucleo-F207ZG
+ */
+
+#include "tcp_app.h"
+#include "lwip/tcp.h"
+#include "lwip/ip_addr.h"
+#include "main.h"
+#include <string.h>
+#include <stdio.h>
+
+/* ---- State ---- */
+uint8_t         tcp_is_connected = 0;
+struct tcp_pcb *tcp_pcb          = NULL;
+
+/* ---- Callbacks ---- */
+
+static err_t on_connected(void *arg, struct tcp_pcb *pcb, err_t err)
+{
+    if (err != ERR_OK) {
+        printf("TCP: connect callback err=%d\r\n", (int)err);
+        tcp_is_connected = 0;
+        return err;
+    }
+    tcp_is_connected = 1;
+    printf("TCP: *** CONNECTED to PC! ***\r\n");
+    return ERR_OK;
+}
+
+static err_t on_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
+{
+    if (p == NULL) {
+        printf("TCP: PC closed the connection\r\n");
+        tcp_is_connected = 0;
+        tcp_pcb = NULL;
+        tcp_close(pcb);
+    } else {
+        tcp_recved(pcb, p->tot_len);
+        pbuf_free(p);
+    }
+    return ERR_OK;
+}
+
+static void on_error(void *arg, err_t err)
+{
+    /* err codes: ERR_RST=-13, ERR_ABRT=-12, ERR_TIMEOUT=-3, ERR_RTE=-4 */
+    printf("TCP: ERROR err=%d (RST=-13, Timeout=-3, NoRoute=-4)\r\n", (int)err);
+    tcp_is_connected = 0;
+    tcp_pcb = NULL;
+}
+
+/* ---- Connect ---- */
+void TCP_Client_Connect(void)
+{
+    ip_addr_t ip;
+
+    if (!ipaddr_aton(PC_IP_ADDR, &ip)) {
+        printf("TCP: bad IP string [%s]\r\n", PC_IP_ADDR);
+        return;
+    }
+
+    printf("TCP: connecting to %s:%d ...\r\n", PC_IP_ADDR, PC_PORT);
+
+    tcp_pcb = tcp_new();
+    if (tcp_pcb == NULL) {
+        printf("TCP: tcp_new() failed (out of memory)\r\n");
+        return;
+    }
+
+    tcp_err(tcp_pcb, on_error);
+    err_t e = tcp_connect(tcp_pcb, &ip, PC_PORT, on_connected);
+    tcp_recv(tcp_pcb, on_recv);
+
+    if (e != ERR_OK) {
+        printf("TCP: tcp_connect() returned err=%d\r\n", (int)e);
+    }
+}
+
+/* ---- Send ---- */
+void TCP_Send(const char *data, uint16_t len)
+{
+    if (!tcp_is_connected || tcp_pcb == NULL) return;
+    if (len == 0) return;
+
+    err_t err = tcp_write(tcp_pcb, data, len, TCP_WRITE_FLAG_COPY);
+    if (err == ERR_OK) {
+        tcp_output(tcp_pcb);
+    } else {
+        printf("TCP: send failed err=%d\r\n", (int)err);
+    }
+}
+

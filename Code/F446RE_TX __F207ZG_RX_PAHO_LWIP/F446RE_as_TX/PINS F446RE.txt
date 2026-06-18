@@ -1,0 +1,20 @@
+PINS F446RE 
+  
+
+Signal               Pin
+USART_TX             PA2 
+USART_RX             PA3
+
+SPI1 (LoRa SX1278)
+Signal               Pin
+SPI1_SCK             PA5 
+SPI1_MISO            PA6
+SPI1_MOSI            PA7
+LORA_NSS             PB6
+LORA_DIO0            PA10
+LORA_RST             PA9
+
+MPU6050
+I2C1_SDA             PB9
+I2C1_SCL             PB8
+MPU_INT              PA8

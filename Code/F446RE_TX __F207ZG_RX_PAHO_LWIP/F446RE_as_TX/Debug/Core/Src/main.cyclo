@@ -1,0 +1,17 @@
+../Core/Src/main.c:161:5:_write	1
+../Core/Src/main.c:169:10:crc16	4
+../Core/Src/main.c:186:17:get_random_ms	1
+../Core/Src/main.c:198:6:HAL_GPIO_EXTI_Callback	4
+../Core/Src/main.c:223:6:vSensorAcquisitionTask	6
+../Core/Src/main.c:286:6:vThresholdDetectionTask	42
+../Core/Src/main.c:506:6:vLoRaCommunicationTask	5
+../Core/Src/main.c:561:6:vSystemMonitorTask	1
+../Core/Src/main.c:607:5:main	10
+../Core/Src/main.c:779:6:SystemClock_Config	3
+../Core/Src/main.c:827:13:MX_SPI1_Init	2
+../Core/Src/main.c:865:13:MX_USART2_UART_Init	2
+../Core/Src/main.c:898:13:MX_I2C1_Init	2
+../Core/Src/main.c:919:13:MX_GPIO_Init	1
+../Core/Src/main.c:988:6:StartDefaultTask	1
+../Core/Src/main.c:1007:6:HAL_TIM_PeriodElapsedCallback	2
+../Core/Src/main.c:1025:6:Error_Handler	1

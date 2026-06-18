@@ -1,0 +1,6 @@
+LORA_NSS (Chip Select)  PD14   GPIOD   
+LORA_RST (Reset)        PF12   GPIOF 
+LORA_DIO0 (Interrupt)   PD15   GPIOD
+SCK                     PA5 
+MISO                    PA6
+MOSI                    PB5

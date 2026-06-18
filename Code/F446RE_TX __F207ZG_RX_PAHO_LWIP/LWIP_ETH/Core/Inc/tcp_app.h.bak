@@ -1,0 +1,19 @@
+#ifndef INC_TCP_APP_H_BAK_
+#define INC_TCP_APP_H_BAK_
+
+#include "lwip/tcp.h"
+#include <stdint.h>
+
+/* ---- Change these to match your setup ---- */
+#define PC_IP_ADDR    "192.168.0.100"   /* Your PC IP */
+#define PC_PORT        7777             /* PC listening port */
+
+/* ---- State flags (read from main.c) ---- */
+extern uint8_t         tcp_is_connected;
+extern struct tcp_pcb *tcp_pcb;
+
+/* ---- Functions ---- */
+void TCP_Client_Connect(void);
+void TCP_Send(const char *data, uint16_t len);
+
+#endif
